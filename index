@@ -276,9 +276,12 @@ const EMAIL_PRIVACY = "rpd@istruzione.it"; // Responsabile della protezione dei 
 const CONSERVAZIONE = "per il tempo necessario alle finalità del progetto e comunque fino alla revoca del consenso";
 const VERSIONE_INFORMATIVA = "1.0";
 
-// Indirizzo a cui arrivano le richieste di supporto (pulsante "Contatti e supporto").
+// Indirizzo/i a cui arrivano le richieste di supporto (pulsante "Contatti e supporto").
+// Per più destinatari separa gli indirizzi con virgola o punto e virgola: "a@istruzione.it; b@istruzione.it".
 // Finché è vuoto, il pannello mostra le risposte rapide ma l'invio della richiesta resta disattivato.
-const EMAIL_SUPPORTO = "giadycan3@gmail.com";
+const EMAIL_SUPPORTO = "giadycan3@gmail.com; giadycan@proton.me";
+const DESTINATARI_SUPPORTO = [...new Set(EMAIL_SUPPORTO.split(/[;,\s]+/).map(x => x.trim()).filter(Boolean))];
+const ELENCO_DESTINATARI = DESTINATARI_SUPPORTO.join(", ");
 
 /* ============ EMAIL ISTITUZIONALE, PRIVACY E INVIO ============ */
 // ATTENZIONE: questa logica è duplicata in google-apps-script.gs (controllo lato server). Tienile allineate.
@@ -367,15 +370,15 @@ function PannelloSupporto({ onClose, passaggio }) {
 
   const oggetto = `[Wizard Buone Pratiche] ${tipo}`;
   const corpo = testo.trim() + (tecnici ? `\n\n---\nPassaggio del wizard: ${passaggio}\nBrowser: ${navigator.userAgent}` : "");
-  const pronto = Boolean(EMAIL_SUPPORTO) && testo.trim().length > 0;
-  const mailto = `mailto:${EMAIL_SUPPORTO}?subject=${encodeURIComponent(oggetto)}&body=${encodeURIComponent(corpo)}`;
+  const pronto = DESTINATARI_SUPPORTO.length > 0 && testo.trim().length > 0;
+  const mailto = `mailto:${DESTINATARI_SUPPORTO.join(",")}?subject=${encodeURIComponent(oggetto)}&body=${encodeURIComponent(corpo)}`;
 
   const copia = async () => {
     try {
-      await navigator.clipboard.writeText(`A: ${EMAIL_SUPPORTO}\nOggetto: ${oggetto}\n\n${corpo}`);
+      await navigator.clipboard.writeText(`A: ${ELENCO_DESTINATARI}\nOggetto: ${oggetto}\n\n${corpo}`);
       setEsitoCopia("✓ Copiato!");
     } catch (e) {
-      setEsitoCopia(`Copia non disponibile: scrivi a ${EMAIL_SUPPORTO} dal tuo programma di posta.`);
+      setEsitoCopia(`Copia non disponibile: scrivi a ${ELENCO_DESTINATARI} dal tuo programma di posta.`);
     }
     setTimeout(() => setEsitoCopia(""), 3000);
   };
@@ -407,7 +410,7 @@ function PannelloSupporto({ onClose, passaggio }) {
         </div>
 
         <h3 className="font-semibold text-teal-900/80 mb-2">✉️ Scrivi al supporto</h3>
-        {!EMAIL_SUPPORTO && (
+        {DESTINATARI_SUPPORTO.length === 0 && (
           <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-2 mb-3">
             Contatto non ancora configurato: chi pubblica il wizard deve inserire l'indirizzo in <code>EMAIL_SUPPORTO</code>.
           </p>
@@ -434,7 +437,7 @@ function PannelloSupporto({ onClose, passaggio }) {
         </div>
         <p className="text-[11px] text-slate-400 mt-3">
           Si apre il tuo programma di posta con il messaggio già pronto: l'invio parte dal tuo indirizzo.
-          Se non si apre nulla, usa «Copia il messaggio» e incollalo nella tua posta{EMAIL_SUPPORTO ? <>, indirizzandolo a <b>{EMAIL_SUPPORTO}</b></> : ""}.
+          Se non si apre nulla, usa «Copia il messaggio» e incollalo nella tua posta{DESTINATARI_SUPPORTO.length ? <>, indirizzandolo a <b>{ELENCO_DESTINATARI}</b></> : ""}.
         </p>
         <p className="text-[11px] text-slate-400 mt-2">
           Per richieste sui tuoi dati personali scrivi al Responsabile della protezione dei dati:{" "}

@@ -1,0 +1,1045 @@
+import React, { useState, useMemo, useEffect } from "react";
+
+/* ============ DATI DI RIFERIMENTO ============ */
+
+const REGIONI = ["Abruzzo","Basilicata","Calabria","Campania","Emilia-Romagna","Friuli-Venezia Giulia","Lazio","Liguria","Lombardia","Marche","Molise","Piemonte","Puglia","Sardegna","Sicilia","Toscana","Trentino-Alto Adige","Umbria","Valle d'Aosta","Veneto"];
+
+const ORDINI = {
+  infanzia: "Scuola dell'infanzia",
+  primaria: "Scuola primaria",
+  secondaria1: "Scuola secondaria di I grado",
+  secondaria2: "Scuola secondaria di II grado",
+};
+
+const ETA_ORDINI = { infanzia: [3, 6], primaria: [6, 11], secondaria1: [11, 14], secondaria2: [14, 19] };
+
+const CAMPI_ESPERIENZA = ["Il sé e l'altro","Il corpo e il movimento","Immagini, suoni, colori","I discorsi e le parole","La conoscenza del mondo"];
+
+const DISCIPLINE = {
+  primaria: ["Italiano","Lingua inglese","Seconda lingua comunitaria","Storia","Geografia","Educazione integrata matematico-scientifico-tecnologica (STEM)","Matematica","Scienze","Tecnologia","Musica","Arte e immagine","Educazione motoria","Educazione civica"],
+  secondaria1: ["Italiano","Latino per l'educazione linguistica (LEL)","Lingua inglese","Seconda lingua comunitaria","Storia","Geografia","Educazione integrata matematico-scientifico-tecnologica (STEM)","Matematica","Scienze","Tecnologia","Musica","Strumento musicale","Arte e immagine","Educazione motoria","Educazione civica"],
+  secondaria2: ["Italiano","Lingue straniere","Storia e Geografia","Filosofia","Matematica e Fisica","Scienze naturali","Informatica","Storia dell'arte","Disegno e storia dell'arte","Scienze motorie","Diritto ed economia","Educazione civica","Discipline di indirizzo"],
+};
+
+// DigComp 3.0 (traduzione italiana ufficiale, v1.0 - 31/03/2026)
+const DIGCOMP = [
+  { area: "1. Ricerca, valutazione e gestione delle informazioni", competenze: ["1.1 Navigare, ricercare e filtrare le informazioni","1.2 Valutare le informazioni","1.3 Gestire le informazioni"] },
+  { area: "2. Comunicazione e collaborazione", competenze: ["2.1 Interagire attraverso e con le tecnologie digitali","2.2 Condividere attraverso le tecnologie digitali","2.3 Esercitare la cittadinanza attraverso le tecnologie digitali","2.4 Collaborare attraverso le tecnologie digitali","2.5 Comportamento digitale","2.6 Gestire l'identità digitale"] },
+  { area: "3. Creazione di contenuti", competenze: ["3.1 Sviluppare contenuti digitali","3.2 Integrare e rielaborare contenuti digitali","3.3 Copyright e licenze","3.4 Pensiero computazionale e programmazione"] },
+  { area: "4. Sicurezza, benessere e uso responsabile", competenze: ["4.1 Proteggere i dispositivi","4.2 Proteggere i dati personali e la privacy","4.3 Supportare il benessere","4.4 Impatti ambientali delle tecnologie digitali"] },
+  { area: "5. Identificazione e risoluzione dei problemi", competenze: ["5.1 Identificare e risolvere problemi tecnici","5.2 Identificare bisogni e risposte tecnologiche digitali","5.3 Identificare soluzioni creative utilizzando le tecnologie digitali","5.4 Identificare e rispondere ai bisogni di competenza digitale"] },
+];
+const TUTTE_COMPETENZE_DIGCOMP = DIGCOMP.flatMap(a => a.competenze);
+const competenzaDaCodice = code => TUTTE_COMPETENZE_DIGCOMP.find(c => c.startsWith(code + " "));
+
+// Competenze chiave per l'apprendimento permanente (Racc. UE 2018)
+const COMPETENZE_CHIAVE = [
+  "Competenza alfabetica funzionale",
+  "Competenza multilinguistica",
+  "Competenza matematica e competenza in scienze, tecnologie e ingegneria",
+  "Competenza digitale",
+  "Competenza personale, sociale e capacità di imparare a imparare",
+  "Competenza in materia di cittadinanza",
+  "Competenza imprenditoriale",
+  "Competenza in materia di consapevolezza ed espressione culturali",
+];
+
+// Traguardi — Profilo dello studente, Indicazioni Nazionali 2025 (competenza digitale, termine del primo ciclo)
+const TRAGUARDI_DIGITALE = [
+  "Utilizzare con consapevolezza e responsabilità le tecnologie digitali per ricercare, produrre ed elaborare dati e informazioni",
+  "Interagire con gli altri sapendo scegliere i mezzi di comunicazione digitali adeguati a un determinato contesto",
+  "Comprendere i principi di base del funzionamento delle tecnologie e dell'intelligenza artificiale (Digitale integrata nel curricolo)",
+  "Adottare comportamenti sicuri, legali ed etici nell'uso degli strumenti digitali (cittadinanza digitale)",
+];
+
+const METODOLOGIE = [
+  "Didattica laboratoriale","Learning by doing","Cooperative learning","Project-Based Learning (PBL)","Flipped classroom","Peer tutoring","Debate","Gamification","Storytelling digitale","Problem solving","Didattica per scoperta","Station teaching","Outdoor education","Coding unplugged","Role playing","Circle time","Brainstorming","Ricerca-azione","Compiti di realtà","Lettura ad alta voce","Alfabetizzazione emotiva"
+];
+
+const TAG_SUGGERITI = ["inclusione","coding","robotica","intelligenza artificiale","ambiente","cittadinanza digitale","interdisciplinarità","creatività","collaborazione","lettura","scienze","arte","musica","motoria","benessere","sicurezza online","media education","sostenibilità","innovazione didattica","tecnologia","linguaggi digitali","orientamento"];
+
+/* ============ SUGGERIMENTI AUTOMATICI ============ */
+// Ogni voce ha una lista di pattern (frammenti di regex senza accenti, cercati a inizio parola).
+
+const KEYWORD_COMPETENZE = {
+  "1.1": ["ricerc","navigar","motore di ricerca","filtr"],
+  "1.2": ["fake","disinformaz","attendibil","font","valutar","verific"],
+  "1.3": ["archivi","organizz","cartell","cloud","dati"],
+  "2.1": ["comunicaz","chat","interag","email","videoconferenz"],
+  "2.2": ["condivi","pubblic","blog"],
+  "2.3": ["cittadinanza","partecipaz","civica"],
+  "2.4": ["collabor","grupp","cooperativ","insieme","documenti condivisi"],
+  "2.5": ["netiquette","bullismo","cyberbull","rispett","comportament","hate"],
+  "2.6": ["identit","profilo","reputazion"],
+  "3.1": ["creare","produrre","video","podcast","presentazion","storytelling","contenut","immagin"],
+  "3.2": ["rielabor","remix","montaggio","editing"],
+  "3.3": ["copyright","licenz","creative commons","diritto d'autore","diritti d'autore"],
+  "3.4": ["coding","programm","scratch","robot","unplugged","algoritm","pensiero computazionale","intelligenza artificiale","ia\\b"],
+  "4.1": ["antivirus","password","dispositiv","malware","phishing"],
+  "4.2": ["privacy","dati personali","gdpr"],
+  "4.3": ["benessere","tempo schermo","dipendenza","salute"],
+  "4.4": ["ambient","sostenib","energia","rifiuti","raee"],
+  "5.1": ["problemi tecnici","guasto","malfunzion","risolv"],
+  "5.2": ["bisogn","strumenti adatt"],
+  "5.3": ["creativ","innovaz","soluzion","prototip","design thinking","problem solving"],
+  "5.4": ["lacun","formazione","autovalutaz"],
+};
+
+const KEYWORD_TAG = {
+  "inclusione": ["inclusi","bes\\b","dsa\\b","disabilit","sostegno"],
+  "coding": ["coding","programm","scratch"],
+  "robotica": ["robot"],
+  "intelligenza artificiale": ["intelligenza artificiale","ia\\b"],
+  "ambiente": ["ambient","ecolog","natura"],
+  "sostenibilità": ["sostenib","agenda 2030"],
+  "cittadinanza digitale": ["cittadinanza","netiquette","cyberbull"],
+  "interdisciplinarità": ["interdisciplin","trasversal"],
+  "creatività": ["creativ","creare","inventare"],
+  "collaborazione": ["collabor","cooperativ","grupp","insieme"],
+  "lettura": ["lettur","leggere","libro","libri"],
+  "scienze": ["scienz","esperiment"],
+  "arte": ["arte\\b","artistic","disegn","pittur"],
+  "musica": ["music","canzon"],
+  "motoria": ["motori","movimento","sport"],
+  "benessere": ["benessere","emozion"],
+  "sicurezza online": ["sicurezza","privacy","password","phishing"],
+  "media education": ["media\\b","giornalis","fake news","fonti"],
+  "innovazione didattica": ["innovaz","flipped","gamification"],
+  "tecnologia": ["tecnolog","digital"],
+  "linguaggi digitali": ["linguagg","video","podcast","storytelling"],
+  "orientamento": ["orientament"],
+};
+
+const KEYWORD_METODOLOGIE = {
+  "Didattica laboratoriale": ["laborator","manipol","sperimentaz"],
+  "Learning by doing": ["laborator","costruire","realizz","fare\\b"],
+  "Cooperative learning": ["grupp","insieme","team","cooperativ"],
+  "Project-Based Learning (PBL)": ["progett"],
+  "Gamification": ["gioc","gamif","punteggi","badge"],
+  "Storytelling digitale": ["raccont","storia","storytelling"],
+  "Problem solving": ["problem"],
+  "Coding unplugged": ["unplugged"],
+  "Flipped classroom": ["flipped","capovolt"],
+  "Peer tutoring": ["peer","tutor","compagni"],
+  "Debate": ["debate","dibattit"],
+  "Outdoor education": ["outdoor","all'aperto","giardino","uscit"],
+  "Lettura ad alta voce": ["lettura ad alta voce","leggere ad alta voce"],
+  "Circle time": ["circle time","cerchio"],
+  "Brainstorming": ["brainstorm"],
+  "Role playing": ["role play","drammatizz","gioco di ruolo"],
+  "Compiti di realtà": ["compito di realt","compiti di realt"],
+};
+
+const normalizza = s =>
+  String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[’‘]/g, "'");
+
+function suggerisci(testo, mappa, max) {
+  const t = normalizza(testo);
+  return Object.entries(mappa)
+    .map(([chiave, pattern]) => [chiave, pattern.reduce((s, p) => s + (new RegExp("\\b" + p).test(t) ? 1 : 0), 0)])
+    .filter(([, punti]) => punti > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, max)
+    .map(([chiave]) => chiave);
+}
+
+/* ============ UI ============ */
+
+const STILE_CARD = "bg-white/80 backdrop-blur rounded-3xl border border-white shadow-xl shadow-teal-900/5 p-6 md:p-8";
+const LABEL = "block text-sm font-semibold text-teal-900/80 mb-1.5";
+const INPUT = "w-full rounded-xl border border-teal-100 bg-white/90 px-3.5 py-2.5 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300 transition";
+const ICONE_STEP = ["🪪", "✍️", "🎒", "📚", "🧭", "🌱", "📨"];
+const STORAGE_KEY = "wizard-buone-pratiche-v2";
+const MAX_PAROLE_ABSTRACT = 150;
+
+function Field({ label, children, hint, required }) {
+  return (
+    <div className="mb-4">
+      <label className={LABEL}>{label}{required && <span className="text-rose-500"> *</span>}</label>
+      {hint && <p className="text-xs text-slate-400 mb-1">{hint}</p>}
+      {children}
+    </div>
+  );
+}
+
+function Chip({ label, selected, onClick, highlight }) {
+  const stato = selected
+    ? "bg-gradient-to-br from-teal-500 to-emerald-500 text-white border-transparent shadow-sm shadow-teal-300/60"
+    : highlight
+      ? "bg-amber-50 text-slate-700 border-amber-300 hover:border-teal-400"
+      : "bg-white/90 text-slate-600 border-teal-100 hover:border-teal-300 hover:bg-teal-50";
+  return (
+    <button type="button" aria-pressed={selected} onClick={onClick}
+      className={`px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${stato}`}>
+      {highlight && !selected && "✨ "}{label}
+    </button>
+  );
+}
+
+function AggiungiManuale({ onAdd, placeholder = "+ aggiungi a mano…" }) {
+  const [val, setVal] = useState("");
+  const conferma = () => {
+    if (val.trim()) { onAdd(val.trim()); setVal(""); }
+  };
+  return (
+    <div className="flex gap-1.5 mt-2">
+      <input className={INPUT} value={val} onChange={e => setVal(e.target.value)} placeholder={placeholder}
+        onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); conferma(); } }} />
+      <button type="button" onClick={conferma}
+        className="px-4 py-1.5 rounded-xl text-xs font-medium bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100 whitespace-nowrap">
+        Aggiungi
+      </button>
+    </div>
+  );
+}
+
+// Chip predefiniti + voci personalizzate già selezionate + campo per aggiungerne altre
+function ChipPicker({ options, selected, onToggle, onAdd, placeholder, suggested = [] }) {
+  const custom = selected.filter(s => !options.includes(s));
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(o => <Chip key={o} label={o} selected={selected.includes(o)} highlight={suggested.includes(o)} onClick={() => onToggle(o)} />)}
+        {custom.map(o => <Chip key={o} label={o} selected={true} onClick={() => onToggle(o)} />)}
+      </div>
+      {onAdd && <AggiungiManuale placeholder={placeholder} onAdd={onAdd} />}
+    </div>
+  );
+}
+
+// Elenco a checkbox per voci lunghe (es. traguardi)
+function CheckList({ options, selected, onToggle, onAdd, placeholder }) {
+  const tutte = [...options, ...selected.filter(s => !options.includes(s))];
+  return (
+    <div>
+      <ul className="space-y-1.5">
+        {tutte.map(o => (
+          <li key={o}>
+            <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
+              <input type="checkbox" className="mt-1 accent-teal-600" checked={selected.includes(o)} onChange={() => onToggle(o)} />
+              <span>{o}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      {onAdd && <AggiungiManuale placeholder={placeholder} onAdd={onAdd} />}
+    </div>
+  );
+}
+
+function Suggerimento({ items, onPick, title }) {
+  if (!items.length) return null;
+  return (
+    <div className="mt-3 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/70 p-3.5">
+      <p className="text-xs font-semibold text-amber-800 mb-1.5">✨ {title}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map(it => (
+          <button key={it} type="button" onClick={() => onPick(it)}
+            className="px-2.5 py-1 rounded-full bg-white border border-amber-300 text-xs text-amber-800 hover:bg-amber-100">
+            + {it}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============ STATO ============ */
+
+const INIZIALE = {
+  titolo: "", autore: "", istituzione: "", regione: "", abstract: "", descrizione: "",
+  email: "", idInvio: "", inviataIl: "", consensoPrivacy: false, consensoInformativa: false,
+  ordini: [], etaMin: "", etaMax: "", campi: [], discipline: {},
+  durata: "", durataUnita: "ore", metodologie: [], tags: [], digcomp: [],
+  competenzeChiave: [], traguardi: [],
+};
+
+function caricaBozza() {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw) return { ...INIZIALE, ...JSON.parse(raw), consensoPrivacy: false, consensoInformativa: false };
+  } catch (e) { /* storage non disponibile */ }
+  return INIZIALE;
+}
+
+const esc = s => String(s).replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ").trim();
+const lista = arr => (arr.length ? arr.map(x => "- " + x).join("\n") : "-");
+
+/* ============ CONFIGURAZIONE (a cura di chi pubblica il wizard) ============ */
+
+// URL dell'app web Google Apps Script (termina con /exec). Vedi google-apps-script.gs.
+const ENDPOINT_INVIO = "https://script.google.com/macros/s/AKfycby0UfDMZb1z03M4A1mSl9H2-d04xjwAklNF3yC8Am_cxhlyrVoU_fd5t6otEfRiUQUC/exec";
+
+// Dati per l'informativa privacy. Verifica che siano aggiornati prima di pubblicare il wizard.
+const TITOLARE = "Ministero dell'istruzione e del merito, Viale di Trastevere 76/A, 00153 Roma";
+const EMAIL_PRIVACY = "rpd@istruzione.it"; // Responsabile della protezione dei dati (RPD)
+const CONSERVAZIONE = "per il tempo necessario alle finalità del progetto e comunque fino alla revoca del consenso";
+const VERSIONE_INFORMATIVA = "1.0";
+
+// Indirizzo a cui arrivano le richieste di supporto (pulsante "Contatti e supporto").
+// Finché è vuoto, il pannello mostra le risposte rapide ma l'invio della richiesta resta disattivato.
+const EMAIL_SUPPORTO = "giadycan3@gmail.com";
+
+/* ============ EMAIL ISTITUZIONALE, PRIVACY E INVIO ============ */
+// ATTENZIONE: questa logica è duplicata in google-apps-script.gs (controllo lato server). Tienile allineate.
+
+const STOPWORD_ISTITUTO = ["scuola","scuole","istituto","comprensivo","statale","liceo","scientifico","classico","linguistico","artistico","superiore","tecnico","professionale","istruzione","primaria","secondaria","infanzia","grado","media","elementare","didattica","direzione","centro","provinciale","paritaria","paritario","dell","della","dello","degli","delle","del","dei","per","con","san","santa","isis","iiss","iis","ipsia","itis","itc"];
+
+const DOMINI_PUBBLICI = ["libero.it","virgilio.it","tiscali.it","tin.it","alice.it","email.it","inwind.it","iol.it","fastwebnet.it","fastweb.it","katamail.it","hotmail.it","outlook.it","yahoo.it","ymail.it","live.it","msn.it","gmail.it","icloud.it","poste.it","posteitaliane.it","tim.it","telecomitalia.it","vodafone.it","wind.it","windtre.it","aruba.it","pec.it","legalmail.it","registerpec.it","arubapec.it","postecert.it","gmx.it","mail.it","tele2.it","teletu.it","jumpy.it","supereva.it"];
+
+// restituisce "" se l'email è accettata, altrimenti il messaggio d'errore
+function controllaEmailIstituzionale(email, istituzione) {
+  const e = String(email || "").trim().toLowerCase();
+  if (!e) return "Inserisci la tua email istituzionale.";
+  const m = e.match(/^[a-z0-9._%+\-]+@([a-z0-9\-]+(?:\.[a-z0-9\-]+)+)$/);
+  if (!m) return "L'indirizzo email non è valido.";
+  const dominio = m[1];
+  const parti = dominio.split(".");
+  const rifiuto = "Email non accettata: usa un indirizzo istituzionale (@istruzione.it, dominio .edu / .edu.it, oppure il dominio .it del tuo istituto). Gli indirizzi personali o di provider pubblici non sono ammessi.";
+  if (dominio === "istruzione.it" || dominio.endsWith(".istruzione.it")) return "";
+  if (parti[parti.length - 1] === "edu" || dominio.endsWith(".edu.it")) return "";
+  if (parti[parti.length - 1] === "it") {
+    if (DOMINI_PUBBLICI.includes(parti.slice(-2).join("."))) return rifiuto;
+    const etichetta = normalizza(parti[parti.length - 2]).replace(/[^a-z0-9]/g, "");
+    const token = normalizza(istituzione).split(/[^a-z0-9]+/).filter(t => t.length >= 3 && !STOPWORD_ISTITUTO.includes(t));
+    if (!token.length) return "Per verificare il dominio .it inserisci il nome completo dell'istituto nel campo «Istituzione scolastica».";
+    if (token.some(t => etichetta.includes(t))) return "";
+    return "Il dominio .it non richiama il nome dell'istituto indicato: controlla il campo «Istituzione scolastica» oppure usa un indirizzo @istruzione.it / .edu.";
+  }
+  return rifiuto;
+}
+
+// individua nel testo dati personali evidenti (non sostituisce la dichiarazione dell'autore)
+function rilevaDatiPersonali(testo) {
+  const t = String(testo || "");
+  const trovati = [];
+  if (/[a-z0-9._%+\-]+@[a-z0-9\-]+(\.[a-z0-9\-]+)+/i.test(t)) trovati.push("indirizzi email");
+  if (/(?:\+39[\s.-]?)?\b3\d{2}[\s.-]?\d{6,7}\b|\b0\d{1,3}[\s.-]?\d{6,8}\b/.test(t)) trovati.push("numeri di telefono");
+  if (/\b[A-Z]{6}\d{2}[A-EHLMPR-T]\d{2}[A-Z]\d{3}[A-Z]\b/i.test(t)) trovati.push("codici fiscali");
+  return trovati;
+}
+
+function costruisciRiga(d) {
+  const aree = DIGCOMP.filter(a => a.competenze.some(c => d.digcomp.includes(c))).map(a => a.area);
+  const disc = d.ordini.map(o => {
+    const voci = o === "infanzia" ? d.campi : d.discipline[o] || [];
+    return `${ORDINI[o]}: ${voci.join(", ") || "—"}`;
+  }).join(" | ");
+  return {
+    titolo: d.titolo.trim(), autore: d.autore.trim(), email: d.email.trim().toLowerCase(),
+    istituzione: d.istituzione.trim(), regione: d.regione,
+    ordini: d.ordini.map(o => ORDINI[o]).join(", "), etaMin: d.etaMin, etaMax: d.etaMax,
+    durata: d.durata, unitaDurata: d.durata ? d.durataUnita : "",
+    tag: d.tags.join(", "), abstract: d.abstract.trim(), descrizione: d.descrizione.trim(),
+    discipline: disc, metodologie: d.metodologie.join(", "), areeDigcomp: aree.join(" | "),
+    competenzeDigcomp: d.digcomp.join(" | "), competenzeChiave: d.competenzeChiave.join(" | "),
+    traguardi: d.traguardi.join(" | "),
+  };
+}
+
+const BTN_PRIMARIO = "bg-gradient-to-r from-teal-500 to-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-full shadow-md shadow-teal-300/50 hover:from-teal-600 hover:to-emerald-600 disabled:opacity-40 disabled:shadow-none transition-all";
+const BTN_SECONDARIO = "bg-white border border-teal-200 text-teal-700 text-sm font-medium px-4 py-2 rounded-full hover:bg-teal-50 disabled:opacity-40 transition-colors";
+
+/* ============ CONTATTI E SUPPORTO ============ */
+
+const TIPI_RICHIESTA = ["Problema tecnico", "Domanda sulla compilazione", "Privacy e dati personali", "Altro"];
+
+const DOMANDE_FREQUENTI = [
+  ["Perché la mia email non viene accettata?", "Sono ammessi solo indirizzi istituzionali: @istruzione.it, domini .edu o .edu.it, oppure il dominio .it del tuo istituto, che deve richiamare il nome scritto nel campo «Istituzione scolastica». Gmail, Libero, PEC e altri indirizzi personali non sono accettati."],
+  ["L'invio non riesce: cosa faccio?", "Controlla la connessione e riprova: la bozza resta salvata in questo browser, quindi non perdi nulla. Se il problema continua, scrivi al supporto dal modulo qui sotto."],
+  ["Il download del documento non parte", "Alcuni ambienti bloccano i download. Nell'anteprima dell'ultimo passaggio usa «Copia» e incolla il testo in un file con estensione .md."],
+  ["Posso citare alunni, alunne, colleghi o colleghe?", "No: non inserire nomi, foto o altri dati personali di persone identificabili. Descrivi l'attività in forma generale."],
+  ["Posso correggere una scheda già inviata?", "Sì, dallo stesso browser: nell'ultimo passaggio premi «Modifica e reinvia». La scheda viene aggiornata, non duplicata."],
+  ["Come chiedo la cancellazione dei miei dati?", `Scrivi al Responsabile della protezione dei dati (${EMAIL_PRIVACY}) indicando titolo della scheda e istituzione.`],
+];
+
+function PannelloSupporto({ onClose, passaggio }) {
+  const [tipo, setTipo] = useState(TIPI_RICHIESTA[0]);
+  const [testo, setTesto] = useState("");
+  const [tecnici, setTecnici] = useState(true);
+  const [esitoCopia, setEsitoCopia] = useState("");
+
+  useEffect(() => {
+    const onKey = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const oggetto = `[Wizard Buone Pratiche] ${tipo}`;
+  const corpo = testo.trim() + (tecnici ? `\n\n---\nPassaggio del wizard: ${passaggio}\nBrowser: ${navigator.userAgent}` : "");
+  const pronto = Boolean(EMAIL_SUPPORTO) && testo.trim().length > 0;
+  const mailto = `mailto:${EMAIL_SUPPORTO}?subject=${encodeURIComponent(oggetto)}&body=${encodeURIComponent(corpo)}`;
+
+  const copia = async () => {
+    try {
+      await navigator.clipboard.writeText(`A: ${EMAIL_SUPPORTO}\nOggetto: ${oggetto}\n\n${corpo}`);
+      setEsitoCopia("✓ Copiato!");
+    } catch (e) {
+      setEsitoCopia(`Copia non disponibile: scrivi a ${EMAIL_SUPPORTO} dal tuo programma di posta.`);
+    }
+    setTimeout(() => setEsitoCopia(""), 3000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 bg-slate-900/30 backdrop-blur-sm" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-labelledby="titolo-supporto" onClick={e => e.stopPropagation()}
+        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-white shadow-2xl shadow-teal-900/20 border border-white p-6">
+        <div aria-hidden="true" className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-teal-300 via-emerald-300 to-sky-300" />
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-teal-600/70 font-semibold">💬 Assistenza</p>
+            <h2 id="titolo-supporto" className="text-xl font-bold text-teal-900">Contatti e supporto</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Chiudi"
+            className="shrink-0 w-8 h-8 rounded-full text-slate-400 hover:bg-teal-50 hover:text-teal-700 transition-colors">✕</button>
+        </div>
+        <p className="text-sm text-slate-500 mb-4">
+          Hai un dubbio o qualcosa non funziona? Dai un'occhiata alle risposte rapide, poi scrivi ai referenti e alle referenti del progetto.
+        </p>
+
+        <div className="space-y-2 mb-5">
+          {DOMANDE_FREQUENTI.map(([domanda, risposta]) => (
+            <details key={domanda} className="rounded-2xl border border-teal-100 bg-teal-50/40 px-3 py-2">
+              <summary className="cursor-pointer text-sm font-medium text-teal-800">{domanda}</summary>
+              <p className="text-xs text-slate-600 mt-2">{risposta}</p>
+            </details>
+          ))}
+        </div>
+
+        <h3 className="font-semibold text-teal-900/80 mb-2">✉️ Scrivi al supporto</h3>
+        {!EMAIL_SUPPORTO && (
+          <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-2 mb-3">
+            Contatto non ancora configurato: chi pubblica il wizard deve inserire l'indirizzo in <code>EMAIL_SUPPORTO</code>.
+          </p>
+        )}
+        <Field label="Tipo di richiesta">
+          <select className={INPUT} value={tipo} onChange={e => setTipo(e.target.value)}>
+            {TIPI_RICHIESTA.map(t => <option key={t}>{t}</option>)}
+          </select>
+        </Field>
+        <Field label="Messaggio" hint="Non inserire nomi o altri dati personali di alunni, alunne, colleghi e colleghe.">
+          <textarea className={INPUT + " min-h-28"} maxLength={1500} value={testo} onChange={e => setTesto(e.target.value)} />
+        </Field>
+        <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
+          <input type="checkbox" className="mt-0.5 accent-teal-600" checked={tecnici} onChange={() => setTecnici(v => !v)} />
+          <span>Includi il passaggio del wizard e il browser in uso (aiuta a risolvere il problema).</span>
+        </label>
+
+        <div className="flex flex-wrap items-center gap-2 mt-4">
+          {pronto
+            ? <a href={mailto} className={BTN_PRIMARIO + " inline-block text-center"}>✉️ Apri la email</a>
+            : <button type="button" disabled className={BTN_PRIMARIO}>✉️ Apri la email</button>}
+          <button type="button" disabled={!pronto} onClick={copia} className={BTN_SECONDARIO}>📋 Copia il messaggio</button>
+          {esitoCopia && <span className="text-xs text-teal-700">{esitoCopia}</span>}
+        </div>
+        <p className="text-[11px] text-slate-400 mt-3">
+          Si apre il tuo programma di posta con il messaggio già pronto: l'invio parte dal tuo indirizzo.
+          Se non si apre nulla, usa «Copia il messaggio» e incollalo nella tua posta{EMAIL_SUPPORTO ? <>, indirizzandolo a <b>{EMAIL_SUPPORTO}</b></> : ""}.
+        </p>
+        <p className="text-[11px] text-slate-400 mt-2">
+          Per richieste sui tuoi dati personali scrivi al Responsabile della protezione dei dati:{" "}
+          <a className="underline hover:text-teal-600" href={`mailto:${EMAIL_PRIVACY}`}>{EMAIL_PRIVACY}</a>.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [step, setStep] = useState(0);
+  const [d, setD] = useState(caricaBozza);
+  const [conferma, setConferma] = useState(false);
+  const [copiato, setCopiato] = useState(false);
+  const [avviso, setAvviso] = useState("");
+  const [supportoAperto, setSupportoAperto] = useState(false);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); } catch (e) { /* ignora */ }
+  }, [d]);
+
+  /* ---- invio al foglio privato del progetto ---- */
+  const [stato, setStato] = useState(""); // "" | "invio" | "ok" | "errore"
+  const [msgInvio, setMsgInvio] = useState("");
+
+  const generaId = () =>
+    window.crypto && window.crypto.randomUUID
+      ? window.crypto.randomUUID()
+      : `bp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+  const invia = async () => {
+    if (!ENDPOINT_INVIO) return;
+    const id = d.idInvio || generaId();
+    const corpo = JSON.stringify({
+      versione: 1,
+      sito: "", // campo trappola anti-bot: deve restare vuoto
+      id,
+      riga: costruisciRiga(d),
+      consensi: { privacy: d.consensoPrivacy, informativa: d.consensoInformativa, versioneInformativa: VERSIONE_INFORMATIVA },
+    });
+    const intestazioni = { "Content-Type": "text/plain;charset=utf-8" };
+    const segna = () => setD(p => ({ ...p, idInvio: id, inviataIl: new Date().toLocaleString("it-IT") }));
+    setStato("invio");
+    setMsgInvio("");
+    try {
+      const res = await fetch(ENDPOINT_INVIO, { method: "POST", headers: intestazioni, body: corpo });
+      const esito = await res.json();
+      if (esito && esito.ok) {
+        segna(); setStato("ok"); setMsgInvio("I referenti e le referenti del progetto hanno ricevuto la scheda.");
+      } else {
+        setD(p => ({ ...p, idInvio: id }));
+        setStato("errore"); setMsgInvio((esito && esito.messaggio) || "Invio non riuscito. Riprova più tardi.");
+      }
+    } catch (e) {
+      // risposta non leggibile dal browser: l'invio è idempotente (stesso ID), quindi si ritenta senza leggere la risposta
+      try {
+        await fetch(ENDPOINT_INVIO, { method: "POST", mode: "no-cors", headers: intestazioni, body: corpo });
+        segna(); setStato("ok");
+        setMsgInvio("Scheda inviata. Non è stato possibile leggere la conferma del server: se non ricevi risposta dai referenti e dalle referenti, riprova a inviare.");
+      } catch (e2) {
+        setD(p => ({ ...p, idInvio: id }));
+        setStato("errore"); setMsgInvio("Connessione non riuscita: controlla la rete e riprova.");
+      }
+    }
+  };
+
+  const azzeraTutto = () => { setD(INIZIALE); setStep(0); setStato(""); setMsgInvio(""); };
+
+  const upd = (k, v) => setD(p => ({ ...p, [k]: typeof v === "function" ? v(p[k]) : v }));
+  const toggleIn = (k, v) => upd(k, arr => (arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v]));
+  const addUnique = (k, v) => upd(k, arr => (arr.includes(v) ? arr : [...arr, v]));
+  const toggleDisc = (o, dis) => upd("discipline", p => {
+    const cur = p[o] || [];
+    return { ...p, [o]: cur.includes(dis) ? cur.filter(x => x !== dis) : [...cur, dis] };
+  });
+  const addDisc = (o, dis) => upd("discipline", p => {
+    const cur = p[o] || [];
+    return cur.includes(dis) ? p : { ...p, [o]: [...cur, dis] };
+  });
+
+  const hasInfanzia = d.ordini.includes("infanzia");
+  const ordiniConDiscipline = d.ordini.filter(o => o !== "infanzia");
+  const attivita = `${d.titolo} ${d.abstract} ${d.descrizione}`;
+
+  const suggCompetenze = useMemo(() => suggerisci(attivita, KEYWORD_COMPETENZE, 6), [attivita]);
+  const suggCompetenzeNomi = useMemo(() => suggCompetenze.map(competenzaDaCodice).filter(Boolean), [suggCompetenze]);
+  const suggTag = useMemo(() => suggerisci(attivita, KEYWORD_TAG, 8).filter(t => !d.tags.includes(t)).slice(0, 6), [attivita, d.tags]);
+  const suggMet = useMemo(() => suggerisci(attivita, KEYWORD_METODOLOGIE, 6).filter(m => !d.metodologie.includes(m)).slice(0, 4), [attivita, d.metodologie]);
+
+  const areeSelezionate = DIGCOMP.filter(a => a.competenze.some(c => d.digcomp.includes(c))).map(a => a.area);
+
+  const parole = d.abstract.trim() ? d.abstract.trim().split(/\s+/).length : 0;
+
+  const steps = ["Anagrafica","Descrizione","Destinatari","Discipline","Metodologie","Competenze","Invio"];
+
+  /* ---- validazione ---- */
+  const etaMin = d.etaMin === "" ? null : Number(d.etaMin);
+  const etaMax = d.etaMax === "" ? null : Number(d.etaMax);
+  const datiRilevati = rilevaDatiPersonali(`${d.titolo} ${d.abstract} ${d.descrizione}`);
+  const errori = [
+    [
+      !d.titolo.trim() && "Inserisci il titolo.",
+      !d.autore.trim() && "Inserisci l'autore/autrice.",
+      !d.istituzione.trim() && "Inserisci l'istituzione scolastica.",
+      !d.regione && "Seleziona la regione.",
+      controllaEmailIstituzionale(d.email, d.istituzione),
+    ],
+    [],
+    [
+      d.ordini.length === 0 && "Seleziona almeno un ordine di scuola.",
+      ((etaMin !== null && (etaMin < 0 || etaMin > 99)) || (etaMax !== null && (etaMax < 0 || etaMax > 99))) && "Le età devono essere comprese tra 0 e 99.",
+      etaMin !== null && etaMax !== null && etaMin > etaMax && "L'età minima non può superare quella massima.",
+    ],
+    [],
+    [d.durata !== "" && Number(d.durata) <= 0 && "La durata deve essere maggiore di zero."],
+    [],
+    [
+      !d.consensoPrivacy && "Spunta la dichiarazione sull'assenza di dati sensibili e personali.",
+      !d.consensoInformativa && "Spunta la presa visione dell'informativa e il consenso al trattamento dei tuoi dati.",
+      datiRilevati.length > 0 && `Nelle sezioni Titolo/Abstract/Descrizione sembrano esserci ${datiRilevati.join(", ")}: rimuovili prima dell'invio.`,
+    ],
+  ].map(e => e.filter(Boolean));
+  const validita = errori.map(e => e.length === 0);
+  const primoNonValido = validita.findIndex(v => !v);
+  const maxRaggiungibile = primoNonValido === -1 ? steps.length - 1 : primoNonValido;
+  const puoInviare = errori.every(e => e.length === 0);
+
+  const usaEtaSuggerita = () => {
+    const fasce = d.ordini.map(o => ETA_ORDINI[o]);
+    if (!fasce.length) return;
+    setD(p => ({ ...p, etaMin: String(Math.min(...fasce.map(f => f[0]))), etaMax: String(Math.max(...fasce.map(f => f[1]))) }));
+  };
+
+  /* ---- documento finale ---- */
+  const documento = useMemo(() => {
+    const righe = [
+      ["Autore/Autrice", d.autore],
+      ["Email istituzionale", d.email],
+      ["Istituzione scolastica", d.istituzione],
+      ["Regione", d.regione],
+      ["Ordine/i di scuola destinatario", d.ordini.map(o => ORDINI[o]).join(", ")],
+      ["Età destinatari", etaMin !== null && etaMax !== null ? `${etaMin}–${etaMax} anni` : etaMin !== null ? `da ${etaMin} anni` : etaMax !== null ? `fino a ${etaMax} anni` : ""],
+      ["Durata", d.durata ? `${d.durata} ${d.durataUnita}` : ""],
+      ["Tag", d.tags.join(", ")],
+    ].filter(([, v]) => String(v).trim());
+
+    const sezioniDisc = d.ordini.map(o => {
+      const voci = o === "infanzia" ? d.campi : d.discipline[o] || [];
+      return `### ${ORDINI[o]}${o === "infanzia" ? " — campi di esperienza" : ""}\n\n${lista(voci)}`;
+    }).join("\n\n");
+
+    return `# ${d.titolo.trim() || "Titolo della buona pratica"}
+
+## Dati generali
+
+| Campo | Valore |
+|---|---|
+${righe.map(([k, v]) => `| ${k} | ${esc(v)} |`).join("\n")}
+
+## Abstract
+
+${d.abstract.trim() || "…"}
+
+## Descrizione dell'attività
+
+${d.descrizione.trim() || "…"}
+
+## Discipline e campi di esperienza coinvolti
+
+${sezioniDisc || "-"}
+
+## Metodologie didattiche
+
+${lista(d.metodologie)}
+
+## Aree di competenza — DigComp 3.0
+
+${lista(areeSelezionate.map(a => `**${a}**`))}
+
+### Competenze specifiche
+
+${lista(d.digcomp)}
+
+## Competenze chiave per l'apprendimento permanente
+
+${lista(d.competenzeChiave)}
+
+## Traguardi per lo sviluppo delle competenze (Indicazioni Nazionali 2025)
+
+${lista(d.traguardi)}
+`;
+  }, [d, etaMin, etaMax, areeSelezionate]);
+
+  const mancanti = [
+    !d.abstract.trim() && "abstract",
+    !d.descrizione.trim() && "descrizione",
+    d.metodologie.length === 0 && "metodologie",
+    d.digcomp.length === 0 && "competenze DigComp",
+    d.ordini.some(o => (o === "infanzia" ? d.campi : d.discipline[o] || []).length === 0) && "discipline/campi di esperienza",
+  ].filter(Boolean);
+
+  const nomeFile = () =>
+    (d.titolo || "buona-pratica").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "buona-pratica";
+
+  const selezionaTesto = () => {
+    const ta = document.getElementById("doc-manuale");
+    if (ta) { ta.focus(); ta.select(); }
+  };
+
+  const scarica = () => {
+    try {
+      const blob = new Blob([documento], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${nomeFile()}.md`;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      // l'URL va liberato solo dopo un po': revocarlo subito può annullare il download
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
+      setAvviso("Download avviato. Se non compare nessun file, l'ambiente in cui stai usando l'app lo blocca: usa «Copia negli appunti» e incolla il testo in un file .md.");
+    } catch (e) {
+      selezionaTesto();
+      setAvviso("Download non riuscito: il testo è stato selezionato, premi Ctrl+C (⌘+C su Mac) per copiarlo.");
+    }
+  };
+
+  const copia = async () => {
+    try {
+      await navigator.clipboard.writeText(documento);
+    } catch (e) {
+      const ta = document.getElementById("doc-manuale");
+      if (ta) { ta.select(); try { document.execCommand("copy"); } catch (e2) { /* ignora */ } }
+    }
+    setCopiato(true);
+    setTimeout(() => setCopiato(false), 2000);
+  };
+
+  const ricomincia = () => {
+    if (!conferma) { setConferma(true); setTimeout(() => setConferma(false), 3000); return; }
+    setD(INIZIALE); setStep(0); setConferma(false); setStato(""); setMsgInvio("");
+  };
+
+  return (
+    <div className="relative overflow-hidden min-h-screen bg-gradient-to-br from-teal-50 via-sky-50 to-violet-50 p-4 pb-24 md:p-8 md:pb-24">
+      {/* contatti e supporto */}
+      <button type="button" onClick={() => setSupportoAperto(true)}
+        className="fixed bottom-4 right-4 z-40 rounded-full bg-white/90 backdrop-blur border border-teal-200 text-teal-700 shadow-lg shadow-teal-900/10 px-4 py-2.5 text-sm font-medium hover:bg-teal-50 transition-colors">
+        💬 Contatti e supporto
+      </button>
+      {supportoAperto && <PannelloSupporto onClose={() => setSupportoAperto(false)} passaggio={`${step + 1}. ${steps[step]}`} />}
+
+      {/* forme decorative sfumate */}
+      <div aria-hidden="true" className="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full bg-teal-200/40 blur-3xl" />
+      <div aria-hidden="true" className="pointer-events-none absolute top-1/3 -right-28 w-96 h-96 rounded-full bg-violet-200/40 blur-3xl" />
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 left-1/4 w-96 h-96 rounded-full bg-amber-100/50 blur-3xl" />
+      <svg aria-hidden="true" className="pointer-events-none absolute top-6 right-6 w-24 h-24 text-teal-300/40 hidden md:block" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M10 70 C 30 20, 60 20, 90 70" /><path d="M25 70 C 40 40, 60 40, 75 70" /><circle cx="50" cy="78" r="4" fill="currentColor" />
+      </svg>
+
+      <div className="relative max-w-3xl mx-auto">
+        <header className="mb-8 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-4">
+            <div className="shrink-0 w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-400 via-emerald-400 to-sky-400 flex items-center justify-center text-2xl shadow-lg shadow-teal-300/50 rotate-3">
+              🌿
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-teal-900 tracking-tight">Wizard Buone Pratiche</h1>
+              <p className="text-sm text-slate-500 mt-1 max-w-md">Racconta la tua esperienza didattica in pochi passaggi. La bozza si salva da sola nel browser.</p>
+            </div>
+          </div>
+          <button onClick={ricomincia}
+            className={`text-xs font-medium px-3.5 py-2 rounded-full border whitespace-nowrap transition-colors ${conferma ? "bg-rose-400 text-white border-rose-400" : "bg-white/80 text-slate-500 border-teal-100 hover:bg-teal-50"}`}>
+            {conferma ? "Conferma: cancella tutto" : "↺ Nuova scheda"}
+          </button>
+        </header>
+
+        {/* progress */}
+        <nav className="mb-7" aria-label="Passaggi">
+          <ol className="flex items-start">
+            {steps.map((s, i) => {
+              const bloccato = i > maxRaggiungibile;
+              const attivo = i === step;
+              const fatto = i < step;
+              return (
+                <li key={s} className="flex-1 flex flex-col items-center relative">
+                  {i > 0 && <span aria-hidden="true" className={`absolute top-5 right-1/2 w-full h-0.5 rounded-full ${i <= step ? "bg-teal-300" : "bg-teal-100"}`} />}
+                  <button disabled={bloccato} onClick={() => setStep(i)} aria-current={attivo ? "step" : undefined} aria-label={`${i + 1}. ${s}`}
+                    className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center text-base transition-all disabled:cursor-not-allowed ${attivo ? "bg-gradient-to-br from-teal-400 to-emerald-500 text-white shadow-lg shadow-teal-300/60 scale-110" : fatto ? "bg-teal-100 text-teal-700 font-bold" : bloccato ? "bg-white/70 text-slate-300 border border-slate-200 grayscale" : "bg-white text-slate-500 border border-teal-100 hover:border-teal-300"}`}>
+                    {fatto ? "✓" : ICONE_STEP[i]}
+                  </button>
+                  <span className={`mt-1.5 text-[10px] md:text-xs font-medium text-center ${attivo ? "text-teal-800" : "text-slate-400"}`}>{s}</span>
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+
+        <div className={STILE_CARD + " relative overflow-hidden"}>
+          <div aria-hidden="true" className="absolute top-0 left-0 h-1.5 rounded-r-full bg-gradient-to-r from-teal-300 via-emerald-300 to-sky-300 transition-all duration-500"
+            style={{ width: `${((step + 1) / steps.length) * 100}%` }} />
+          <p className="mb-1 text-[11px] uppercase tracking-widest text-teal-600/70 font-semibold">
+            {ICONE_STEP[step]} Passaggio {step + 1} di {steps.length}
+          </p>
+          {/* STEP 0 */}
+          {step === 0 && (
+            <div>
+              <h2 className="text-xl font-bold text-teal-900 mb-5">Dati anagrafici</h2>
+              <Field label="Titolo della buona pratica" required>
+                <input className={INPUT} value={d.titolo} onChange={e => upd("titolo", e.target.value)} placeholder="Es. Coding unplugged: insegnare il pensiero computazionale giocando" />
+              </Field>
+              <Field label="Autore/Autrice" required>
+                <input className={INPUT} value={d.autore} onChange={e => upd("autore", e.target.value)} placeholder="Nome e cognome" />
+              </Field>
+              <Field label="Istituzione scolastica" required>
+                <input className={INPUT} value={d.istituzione} onChange={e => upd("istituzione", e.target.value)} placeholder="Es. IC Leonardo da Vinci" />
+              </Field>
+              <Field label="Email istituzionale" required hint="Solo indirizzi istituzionali: @istruzione.it, domini .edu / .edu.it oppure il dominio .it del tuo istituto (che richiami il nome della scuola). Altri indirizzi non sono accettati. Sarà visibile solo ai referenti e alle referenti del progetto, che la useranno per eventuali contatti.">
+                <input className={INPUT} type="email" autoComplete="email" value={d.email} onChange={e => upd("email", e.target.value)} placeholder="nome.cognome@istruzione.it" />
+              </Field>
+              <Field label="Regione" required>
+                <select className={INPUT} value={d.regione} onChange={e => upd("regione", e.target.value)}>
+                  <option value="">— Seleziona —</option>
+                  {REGIONI.map(r => <option key={r}>{r}</option>)}
+                </select>
+              </Field>
+            </div>
+          )}
+
+          {/* STEP 1 */}
+          {step === 1 && (
+            <div>
+              <h2 className="text-xl font-bold text-teal-900 mb-5">Descrizione</h2>
+              <Field label="Abstract" hint={`Breve sintesi della pratica (max ${MAX_PAROLE_ABSTRACT} parole).`}>
+                <textarea className={INPUT + " min-h-28"} value={d.abstract} onChange={e => upd("abstract", e.target.value)} />
+                <p className={`text-xs mt-1 text-right ${parole > MAX_PAROLE_ABSTRACT ? "text-rose-600 font-semibold" : "text-slate-400"}`}>
+                  {parole}/{MAX_PAROLE_ABSTRACT} parole
+                </p>
+              </Field>
+              <Field label="Descrizione dell'attività" hint="Descrivi fasi, strumenti, materiali: l'analisi di questo testo alimenta i suggerimenti automatici di tag, competenze DigComp e metodologie. Non inserire nomi o dati personali di alunni e alunne, famiglie, colleghi e colleghe.">
+                <textarea className={INPUT + " min-h-40"} value={d.descrizione} onChange={e => upd("descrizione", e.target.value)} />
+              </Field>
+              {datiRilevati.length > 0 && (
+                <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-2 mb-4" role="alert">
+                  ⚠️ Nel testo sembrano esserci {datiRilevati.join(", ")}: rimuovili prima dell'invio.
+                </p>
+              )}
+              <Field label="Tag">
+                <div className="flex flex-wrap gap-1.5">
+                  {d.tags.map(t => <Chip key={t} label={t} selected={true} onClick={() => toggleIn("tags", t)} />)}
+                </div>
+                <AggiungiManuale placeholder="+ aggiungi tag…" onAdd={t => addUnique("tags", t)} />
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {TAG_SUGGERITI.filter(t => !d.tags.includes(t) && !suggTag.includes(t)).slice(0, 8).map(t => (
+                    <button key={t} type="button" onClick={() => addUnique("tags", t)}
+                      className="px-2 py-0.5 rounded-full border border-dashed border-slate-300 text-[11px] text-slate-500 hover:border-teal-400 hover:text-teal-600">
+                      + {t}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Suggerimento title="Tag suggeriti in base alla descrizione" items={suggTag} onPick={t => addUnique("tags", t)} />
+            </div>
+          )}
+
+          {/* STEP 2 */}
+          {step === 2 && (
+            <div>
+              <h2 className="text-xl font-bold text-teal-900 mb-5">Destinatari</h2>
+              <Field label="Ordine/i di scuola destinatario" required>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(ORDINI).map(([k, v]) => <Chip key={k} label={v} selected={d.ordini.includes(k)} onClick={() => toggleIn("ordini", k)} />)}
+                </div>
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Età minima (anni)">
+                  <input className={INPUT} type="number" min="0" max="99" value={d.etaMin} onChange={e => upd("etaMin", e.target.value)} />
+                </Field>
+                <Field label="Età massima (anni)">
+                  <input className={INPUT} type="number" min="0" max="99" value={d.etaMax} onChange={e => upd("etaMax", e.target.value)} />
+                </Field>
+              </div>
+              {d.ordini.length > 0 && (
+                <button type="button" onClick={usaEtaSuggerita}
+                  className="text-xs text-teal-600 hover:underline">
+                  Usa la fascia d'età tipica degli ordini selezionati
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* STEP 3 */}
+          {step === 3 && (
+            <div>
+              <h2 className="text-xl font-bold text-teal-900 mb-5">Discipline e campi di esperienza</h2>
+              {d.ordini.length === 0 && <p className="text-sm text-slate-400">Seleziona prima almeno un ordine di scuola (passaggio Destinatari).</p>}
+              {hasInfanzia && (
+                <div className="mb-5">
+                  <p className="text-sm font-semibold text-slate-600 mb-2">{ORDINI.infanzia} — campi di esperienza</p>
+                  <ChipPicker options={CAMPI_ESPERIENZA} selected={d.campi}
+                    onToggle={c => toggleIn("campi", c)} onAdd={c => addUnique("campi", c)} placeholder="Altro campo non in elenco…" />
+                </div>
+              )}
+              {ordiniConDiscipline.map(o => (
+                <div key={o} className="mb-5">
+                  <p className="text-sm font-semibold text-slate-600 mb-2">{ORDINI[o]}</p>
+                  <ChipPicker options={DISCIPLINE[o] || []} selected={d.discipline[o] || []}
+                    onToggle={dis => toggleDisc(o, dis)} onAdd={dis => addDisc(o, dis)} placeholder={`Altra disciplina per ${ORDINI[o]}…`} />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* STEP 4 */}
+          {step === 4 && (
+            <div>
+              <h2 className="text-xl font-bold text-teal-900 mb-5">Metodologie e durata</h2>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <Field label="Durata">
+                  <input className={INPUT} type="number" min="1" value={d.durata} onChange={e => upd("durata", e.target.value)} />
+                </Field>
+                <Field label="Unità">
+                  <select className={INPUT} value={d.durataUnita} onChange={e => upd("durataUnita", e.target.value)}>
+                    <option>ore</option><option>lezioni</option><option>settimane</option><option>mesi</option>
+                  </select>
+                </Field>
+              </div>
+              <Field label="Metodologie didattiche coinvolte">
+                <ChipPicker options={METODOLOGIE} selected={d.metodologie} suggested={suggMet}
+                  onToggle={m => toggleIn("metodologie", m)} onAdd={m => addUnique("metodologie", m)} placeholder="Altra metodologia non in elenco…" />
+              </Field>
+              <Suggerimento title="Metodologie suggerite in base alla descrizione" items={suggMet} onPick={m => toggleIn("metodologie", m)} />
+            </div>
+          )}
+
+          {/* STEP 5 */}
+          {step === 5 && (
+            <div>
+              <h2 className="text-xl font-bold text-teal-900 mb-3">Competenze</h2>
+
+              {suggCompetenzeNomi.length > 0 && (
+                <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                  <p className="font-semibold mb-1">✨ Competenze DigComp suggerite dall'analisi della descrizione</p>
+                  <p className="mb-2">{suggCompetenzeNomi.join(" · ")}</p>
+                  <button type="button" onClick={() => suggCompetenzeNomi.forEach(c => addUnique("digcomp", c))}
+                    className="px-2.5 py-1 rounded-full bg-white border border-amber-300 hover:bg-amber-100">
+                    Applica tutte
+                  </button>
+                </div>
+              )}
+
+              <p className="text-xs text-slate-400 mb-2">Le aree DigComp nel documento vengono ricavate automaticamente dalle competenze scelte.</p>
+              {DIGCOMP.map((area, ai) => {
+                const tutteSel = area.competenze.every(c => d.digcomp.includes(c));
+                const areaSuggerita = suggCompetenze.some(code => code.startsWith(`${ai + 1}.`));
+                return (
+                  <div key={area.area} className={`mb-3 rounded-2xl border p-3.5 ${areaSuggerita ? "border-amber-200 bg-amber-50/50" : "border-teal-100 bg-white/60"}`}>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="text-sm font-semibold text-slate-700">{area.area}</span>
+                      <button type="button" className="text-xs text-teal-600 hover:underline whitespace-nowrap"
+                        onClick={() => upd("digcomp", arr => tutteSel
+                          ? arr.filter(c => !area.competenze.includes(c))
+                          : [...arr, ...area.competenze.filter(c => !arr.includes(c))])}>
+                        {tutteSel ? "Deseleziona area" : "Seleziona area"}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {area.competenze.map(c => (
+                        <Chip key={c} label={c} selected={d.digcomp.includes(c)} highlight={suggCompetenzeNomi.includes(c)} onClick={() => toggleIn("digcomp", c)} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {d.digcomp.filter(c => !TUTTE_COMPETENZE_DIGCOMP.includes(c)).length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1">
+                  {d.digcomp.filter(c => !TUTTE_COMPETENZE_DIGCOMP.includes(c)).map(c => (
+                    <Chip key={c} label={c} selected={true} onClick={() => toggleIn("digcomp", c)} />
+                  ))}
+                </div>
+              )}
+              <AggiungiManuale placeholder="Competenza DigComp personalizzata…" onAdd={c => addUnique("digcomp", c)} />
+
+              <h3 className="font-semibold text-teal-900/80 mt-6 mb-2">Competenze chiave per l'apprendimento permanente</h3>
+              <ChipPicker options={COMPETENZE_CHIAVE} selected={d.competenzeChiave}
+                onToggle={c => toggleIn("competenzeChiave", c)} onAdd={c => addUnique("competenzeChiave", c)} placeholder="Altra competenza chiave…" />
+
+              <h3 className="font-semibold text-teal-900/80 mt-6 mb-2">Traguardi competenza digitale — Indicazioni Nazionali 2025</h3>
+              <CheckList options={TRAGUARDI_DIGITALE} selected={d.traguardi}
+                onToggle={t => toggleIn("traguardi", t)} onAdd={t => addUnique("traguardi", t)} placeholder="Altro traguardo (anche di altre discipline)…" />
+            </div>
+          )}
+
+          {/* STEP 6 */}
+          {step === 6 && (
+            <div>
+              <h2 className="text-xl font-bold text-teal-900 mb-3">Controlla e invia</h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Verifica il documento, spunta le dichiarazioni sulla privacy e invia la tua buona pratica.
+                I dati sono visibili solo ai referenti e alle referenti del progetto e alle persone da loro autorizzate.
+              </p>
+
+              {mancanti.length > 0 && (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3">
+                  Non ancora compilato: {mancanti.join(", ")}. Puoi tornare indietro dai passaggi in alto.
+                </p>
+              )}
+
+              <details className="mb-4 rounded-2xl border border-teal-100 bg-white/60 p-3">
+                <summary className="cursor-pointer text-sm font-medium text-teal-700">👀 Anteprima del documento (e copia personale)</summary>
+                <div className="flex gap-2 flex-wrap my-3">
+                  <button onClick={copia} className={BTN_SECONDARIO}>{copiato ? "✓ Copiato!" : "📋 Copia"}</button>
+                  <button onClick={scarica} className={BTN_SECONDARIO}>⬇ Scarica .md</button>
+                </div>
+                {avviso && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2">{avviso}</p>}
+                <textarea id="doc-manuale" readOnly value={documento} onFocus={e => e.target.select()}
+                  className="w-full h-56 bg-slate-800 text-teal-50 text-xs rounded-2xl p-4 overflow-auto font-mono border border-slate-700 shadow-inner" />
+              </details>
+
+              <div className="rounded-2xl bg-gradient-to-br from-rose-50/70 to-amber-50 border border-amber-200/80 p-4 mb-4">
+                <h3 className="font-semibold text-teal-900/80 mb-3">🔒 Privacy e dati personali</h3>
+                <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer mb-3">
+                  <input type="checkbox" className="mt-1 accent-teal-600" checked={d.consensoPrivacy} onChange={() => upd("consensoPrivacy", v => !v)} />
+                  <span>
+                    Dichiaro che le informazioni inserite <b>non contengono dati sensibili né dati personali</b> riferiti ad alunni e alunne, famiglie,
+                    colleghi e colleghe o altre persone identificabili (nomi e cognomi, foto, video, registrazioni vocali, dati sulla salute, su disabilità o BES
+                    di singoli, situazioni familiari, valutazioni individuali, codici fiscali, recapiti) e che non sono presenti materiali riservati.
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
+                  <input type="checkbox" className="mt-1 accent-teal-600" checked={d.consensoInformativa} onChange={() => upd("consensoInformativa", v => !v)} />
+                  <span>
+                    Ho letto l'informativa e <b>acconsento al trattamento dei miei dati</b> (nome, cognome, email istituzionale, istituzione)
+                    per la raccolta delle buone pratiche e per eventuali contatti da parte dei referenti e delle referenti del progetto.
+                  </span>
+                </label>
+                <details className="text-xs text-slate-600 mt-3">
+                  <summary className="cursor-pointer text-teal-700 font-medium">Leggi l'informativa privacy (v{VERSIONE_INFORMATIVA})</summary>
+                  <div className="mt-2 space-y-1.5">
+                    <p><b>Titolare del trattamento:</b> {TITOLARE}.</p>
+                    <p><b>Responsabile della protezione dei dati (RPD):</b> {EMAIL_PRIVACY}.</p>
+                    <p><b>Dati trattati:</b> autore/autrice, email istituzionale, istituzione scolastica e regione, insieme ai contenuti della scheda (titolo, abstract, descrizione, ordini di scuola, età, durata, discipline o campi di esperienza, metodologie e competenze).</p>
+                    <p><b>Finalità:</b> raccolta e valorizzazione delle buone pratiche didattiche e contatti con chi ha inviato la scheda, da parte dei referenti e delle referenti del progetto.</p>
+                    <p><b>Base giuridica:</b> consenso (art. 6, par. 1, lett. a, GDPR), revocabile in ogni momento senza pregiudicare la liceità del trattamento già effettuato.</p>
+                    <p><b>Natura del conferimento:</b> facoltativo; senza i dati richiesti non è possibile inviare la scheda.</p>
+                    <p><b>Accesso ai dati:</b> solo i referenti e le referenti del progetto e le persone da loro autorizzate. I dati non sono pubblicati né diffusi e non sono ceduti a terzi senza ulteriore consenso. Non è previsto alcun processo decisionale automatizzato.</p>
+                    <p><b>Archiviazione:</b> foglio di calcolo ad accesso riservato, su servizi cloud di Google (Fogli e Apps Script).</p>
+                    <p><b>Conservazione:</b> {CONSERVAZIONE}.</p>
+                    <p><b>Diritti:</b> accesso, rettifica, cancellazione, limitazione, opposizione e revoca del consenso (artt. 15-22 GDPR), scrivendo al Titolare o al RPD ({EMAIL_PRIVACY}).</p>
+                    <p><b>Reclamo:</b> è possibile proporre reclamo al Garante per la protezione dei dati personali (www.garanteprivacy.it).</p>
+                  </div>
+                </details>
+              </div>
+
+              {stato === "ok" ? (
+                <div className="rounded-2xl bg-teal-50 border border-teal-200 p-4">
+                  <p className="font-semibold text-teal-900 mb-1">✅ Grazie! La tua buona pratica è stata inviata.</p>
+                  <p className="text-xs text-slate-600 mb-3">{msgInvio}</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={azzeraTutto} className={BTN_PRIMARIO}>Compila un'altra scheda</button>
+                    <button onClick={() => setStato("")} className={BTN_SECONDARIO}>Modifica e reinvia</button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {!ENDPOINT_INVIO && (
+                    <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-2 mb-2">
+                      Invio non ancora configurato: chi pubblica il wizard deve inserire l'URL dell'app web in <code>ENDPOINT_INVIO</code>.
+                    </p>
+                  )}
+                  <button disabled={!puoInviare || stato === "invio" || !ENDPOINT_INVIO} onClick={invia} className={BTN_PRIMARIO}>
+                    {stato === "invio" ? "Invio in corso…" : d.inviataIl ? "📨 Reinvia (aggiorna la scheda)" : "📨 Invia la buona pratica"}
+                  </button>
+                  {stato === "errore" && <p className="text-xs text-rose-600 mt-2" role="alert">{msgInvio}</p>}
+                </div>
+              )}
+
+              <p className="text-[11px] text-slate-400 mt-5">
+                La bozza è salvata solo in questo browser. Se stai usando un computer condiviso,{" "}
+                <button type="button" onClick={azzeraTutto} className="underline hover:text-rose-500">cancella i dati da questo dispositivo</button>.
+              </p>
+            </div>
+          )}
+
+          {/* errori */}
+          {errori[step].length > 0 && (
+            <ul className="mt-4 text-xs text-rose-600 space-y-0.5" role="alert">
+              {errori[step].map(e => <li key={e}>• {e}</li>)}
+            </ul>
+          )}
+
+          {/* nav */}
+          <div className="flex justify-between mt-8 pt-5 border-t border-teal-100/70">
+            <button onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}
+              className="px-5 py-2 rounded-full text-sm text-teal-700 bg-white border border-teal-200 disabled:opacity-40 hover:bg-teal-50 transition-colors">← Indietro</button>
+            {step < steps.length - 1
+              ? <button onClick={() => validita[step] && setStep(s => s + 1)} disabled={!validita[step]}
+                  className="px-6 py-2 rounded-full text-sm font-medium bg-gradient-to-r from-teal-500 to-emerald-500 text-white shadow-md shadow-teal-300/50 disabled:opacity-40 disabled:shadow-none hover:from-teal-600 hover:to-emerald-600 transition-all">Avanti →</button>
+              : <span className="text-xs text-teal-600 self-center font-medium">Documento pronto ✨</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
